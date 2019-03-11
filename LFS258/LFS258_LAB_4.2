@@ -1,0 +1,353 @@
+LFS 258
+=====****====
+
+Notes in <+++ notes +++> means this is not in the output of the command but added in notepad++ for reference.
+
+https://kubernetes.io/docs/concepts/cluster-administration/networking/
+
+Networking for k8s
+
+In the google could k8s cluster that we created with three VM we used:
+
+Weave Net from Weaveworks
+-------------------------
+Weave Net is a resilient and simple to use network for Kubernetes and its hosted applications. Weave Net runs as a CNI plug-in or stand-alone. In either version, it doesn’t require any configuration or extra code to run, and in both cases, the network provides one IP address per pod - as is standard for Kubernetes.
+
+CNI: Container Network Interface
+https://github.com/containernetworking/cni
+
+CNI plugin can be used to configure the network of a pod and provide a single IP per pod
+CNI does not help in pod-to-pod communication across nodes
+
+Weave is a software defined overlay solution that enables this.
+
+NAT - Network Address Translation
+
+Mesos: http://mesos.apache.org/documentation/latest/architecture/
+
+============
+Lab 4.2
+============
+
+Creating namespaces
+
+root@instance-1:~/test/CKA/LFS258# kubectl get namespaces
+NAME          STATUS   AGE
+default       Active   21h
+kube-public   Active   21h
+kube-system   Active   21h
+root@instance-1:~/test/CKA/LFS258# kubectl create namespace low-usage-limit
+namespace/low-usage-limit created
+root@instance-1:~/test/CKA/LFS258# kubectl get namespaces
+NAME              STATUS   AGE
+default           Active   21h
+kube-public       Active   21h
+kube-system       Active   21h
+low-usage-limit   Active   4s
+root@instance-1:~/test/CKA/LFS258# vim low-resource-range.yml
+
+==modyfing limits of namespaces==
+
+root@instance-1:~/test/CKA/LFS258# cat low-resource-range.yml
+apiVersion: v1
+kind: LimitRange
+metadata:
+ name: low-resource-range
+ spec:
+   limits:
+   - default:
+          cpu: 1
+          memory: 500Mi
+     defaultRequest:
+          cpu: 0.5
+          memory: 100Mi
+     type: Container
+root@instance-1:~/test/CKA/LFS258# kubectl --namespace=low-usage-limit \
+> create -f low-resource-range.yml
+error: error validating "low-resource-range.yml": error validating data: ValidationError(LimitRange.metadata): unknown field "spec" in io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta; if you choose to ignore these errors, turn validation off with --validate=false
+
+==spec should eb aligned to metadata==
+
+root@instance-1:~/test/CKA/LFS258# vim low-resource-range.yml
+root@instance-1:~/test/CKA/LFS258# cat low-resource-range.yml
+apiVersion: v1
+kind: LimitRange
+metadata:
+ name: low-resource-range
+spec:
+   limits:
+   - default:
+          cpu: 1
+          memory: 500Mi
+     defaultRequest:
+          cpu: 0.5
+          memory: 100Mi
+     type: Container
+	 
+	 
+
+==Creating LimitRange object and assigning to low-resource-range namespace==
+
+root@instance-1:~/test/CKA/LFS258# kubectl --namespace=low-usage-limit \
+> create -f low-resource-range.yml
+limitrange/low-resource-range created
+root@instance-1:~/test/CKA/LFS258#
+
+root@instance-1:~/test/CKA/LFS258# kubectl get LimitRange
+No resources found.
+
+
+root@instance-1:~/test/CKA/LFS258# kubectl get LimitRange --all-namespaces
+NAMESPACE         NAME                 CREATED AT
+low-usage-limit   low-resource-range   2019-03-11T03:48:12Z
+root@instance-1:~/test/CKA/LFS258#
+
+
+==Creating a deployment in the low-usage-limit namespace==
+root@instance-1:~/test/CKA/LFS258# kubectl -n low-usage-limit \
+> create deployment limited-hog --image vish/stress
+deployment.apps/limited-hog created
+root@instance-1:~/test/CKA/LFS258# kubectl get deployments --all-namespaces
+NAMESPACE         NAME           READY   UP-TO-DATE   AVAILABLE   AGE
+default           hello-deploy   3/3     3            3           7h3m
+default           hog            1/1     1            1           29m
+kube-system       coredns        0/2     2            0           21h
+low-usage-limit   limited-hog    1/1     1            1           21s
+root@instance-1:~/test/CKA/LFS258#
+
+root@instance-1:~/test/CKA/LFS258# kubectl -n low-usage-limit \
+> get pod limited-hog-568fbbf4cf-g7qd7 -o yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  annotations:
+    kubernetes.io/limit-ranger: 'LimitRanger plugin set: cpu, memory request for container
+      stress; cpu, memory limit for container stress'
+  creationTimestamp: "2019-03-11T03:52:45Z"
+  generateName: limited-hog-568fbbf4cf-
+  labels:
+    app: limited-hog
+    pod-template-hash: 568fbbf4cf
+  name: limited-hog-568fbbf4cf-g7qd7
+  namespace: low-usage-limit
+  ownerReferences:
+  - apiVersion: apps/v1
+    blockOwnerDeletion: true
+    controller: true
+    kind: ReplicaSet
+    name: limited-hog-568fbbf4cf
+    uid: 20ea0cc6-43b1-11e9-8f7d-42010a8e0002
+  resourceVersion: "111175"
+  selfLink: /api/v1/namespaces/low-usage-limit/pods/limited-hog-568fbbf4cf-g7qd7
+  uid: 20ecc2e9-43b1-11e9-8f7d-42010a8e0002
+spec:
+  containers:
+  - image: vish/stress
+    imagePullPolicy: Always
+    name: stress
+    resources:
+      limits:
+        cpu: "1"
+        memory: 500Mi
+      requests:
+        cpu: 500m
+        memory: 100Mi
+    terminationMessagePath: /dev/termination-log
+    terminationMessagePolicy: File
+    volumeMounts:
+    - mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+      name: default-token-4b59s
+      readOnly: true
+  dnsPolicy: ClusterFirst
+  enableServiceLinks: true
+  nodeName: instance-2
+  priority: 0
+  restartPolicy: Always
+  schedulerName: default-scheduler
+  securityContext: {}
+  serviceAccount: default
+  serviceAccountName: default
+  terminationGracePeriodSeconds: 30
+  tolerations:
+  - effect: NoExecute
+    key: node.kubernetes.io/not-ready
+    operator: Exists
+    tolerationSeconds: 300
+  - effect: NoExecute
+    key: node.kubernetes.io/unreachable
+    operator: Exists
+    tolerationSeconds: 300
+  volumes:
+  - name: default-token-4b59s
+    secret:
+      defaultMode: 420
+      secretName: default-token-4b59s
+status:
+  conditions:
+  - lastProbeTime: null
+    lastTransitionTime: "2019-03-11T03:52:45Z"
+    status: "True"
+    type: Initialized
+  - lastProbeTime: null
+    lastTransitionTime: "2019-03-11T03:52:48Z"
+    status: "True"
+    type: Ready
+  - lastProbeTime: null
+    lastTransitionTime: "2019-03-11T03:52:48Z"
+    status: "True"
+    type: ContainersReady
+  - lastProbeTime: null
+    lastTransitionTime: "2019-03-11T03:52:45Z"
+    status: "True"
+    type: PodScheduled
+  containerStatuses:
+  - containerID: docker://8534f6381c37ecddce2ef941530682c1c1661c0e3bec75f229d7ee6db134cc49
+    image: vish/stress:latest
+    imageID: docker-pullable://vish/stress@sha256:b6456a3df6db5e063e1783153627947484a3db387be99e49708c70a9a15e7177
+    lastState: {}
+    name: stress
+    ready: true
+    restartCount: 0
+    state:
+      running:
+        startedAt: "2019-03-11T03:52:47Z"
+  hostIP: 10.142.0.3
+  phase: Running
+  podIP: 10.44.0.1
+  qosClass: Burstable
+  startTime: "2019-03-11T03:52:45Z"
+
+
+Node - 2 top
+
+root@instance-2:~# top
+top - 03:57:05 up 21:33,  1 user,  load average: 0.04, 0.04, 0.05
+Tasks: 122 total,   1 running,  83 sleeping,   0 stopped,   0 zombie
+%Cpu(s):  1.8 us,  2.3 sy,  0.0 ni, 95.9 id,  0.0 wa,  0.0 hi,  0.0 si,  0.0 st
+KiB Mem :  7652352 total,  4239820 free,   447536 used,  2964996 buff/cache
+KiB Swap:        0 total,        0 free,        0 used.  6899640 avail Mem
+
+  PID USER      PR  NI    VIRT    RES    SHR S  %CPU %MEM     TIME+ COMMAND
+ 5541 root      20   0 1350820  92800  57960 S   1.7  1.2  31:52.94 kubelet
+ 4914 root      20   0 1190240  90392  40512 S   0.7  1.2  11:56.73 dockerd
+ 5886 root      20   0  137180  30560  23548 S   0.7  0.4   3:27.30 kube-proxy
+ 1559 root      20   0  784176  29660  18044 S   0.3  0.4   0:05.57 snapd
+ 4941 root      20   0 1232752  37688  22284 S   0.3  0.5   5:03.90 docker-containe
+    1 root      20   0  160004   9272   6680 S   0.0  0.1   0:05.00 systemd
+    2 root      20   0       0      0      0 S   0.0  0.0   0:00.01 kthreadd
+    4 root       0 -20       0      0      0 I   0.0  0.0   0:00.00 kworker/0:0H
+    6 root       0 -20       0      0      0 I   0.0  0.0   0:00.00 mm_percpu_wq
+    7 root      20   0       0      0      0 S   0.0  0.0   0:01.25 ksoftirqd/0
+    8 root      20   0       0      0      0 I   0.0  0.0   0:25.01 rcu_sched
+    9 root      20   0       0      0      0 I   0.0  0.0   0:00.00 rcu_bh
+   10 root      rt   0       0      0      0 S   0.0  0.0   0:00.09 migration/0
+   11 root      rt   0       0      0      0 S   0.0  0.0   0:00.19 watchdog/0
+   12 root      20   0       0      0      0 S   0.0  0.0   0:00.00 cpuhp/0
+   13 root      20   0       0      0      0 S   0.0  0.0   0:00.00 cpuhp/1
+   14 root      rt   0       0      0      0 S   0.0  0.0   0:00.18 watchdog/1
+   15 root      rt   0       0      0      0 S   0.0  0.0   0:00.09 migration/1
+   16 root      20   0       0      0      0 S   0.0  0.0   0:01.24 ksoftirqd/1
+   18 root       0 -20       0      0      0 I   0.0  0.0   0:00.00 kworker/1:0H
+   19 root      20   0       0      0      0 S   0.0  0.0   0:00.00 kdevtmpfs
+   20 root       0 -20       0      0      0 I   0.0  0.0   0:00.00 netns
+   21 root      20   0       0      0      0 S   0.0  0.0   0:00.00 rcu_tasks_kthre
+   22 root      20   0       0      0      0 S   0.0  0.0   0:00.00 kauditd
+   25 root      20   0       0      0      0 S   0.0  0.0   0:00.08 khungtaskd
+   26 root      20   0       0      0      0 S   0.0  0.0   0:00.00 oom_reaper
+   27 root       0 -20       0      0      0 I   0.0  0.0   0:00.00 writeback
+   28 root      20   0       0      0      0 S   0.0  0.0   0:00.00 kcompactd0
+   29 root      25   5       0      0      0 S   0.0  0.0   0:00.00 ksmd
+   30 root      39  19       0      0      0 S   0.0  0.0   0:00.30 khugepa
+   
+Node - 3 top
+root@instance-3:~# top
+top - 03:57:26 up 21:32,  1 user,  load average: 2.14, 2.29, 2.10
+Tasks: 125 total,   1 running,  88 sleeping,   0 stopped,   0 zombie
+%Cpu(s): 19.2 us, 80.8 sy,  0.0 ni,  0.0 id,  0.0 wa,  0.0 hi,  0.0 si,  0.0 st
+KiB Mem :  7652344 total,  3350300 free,  1419796 used,  2882248 buff/cache
+KiB Swap:        0 total,        0 free,        0 used.  5927204 avail Mem
+
+  PID USER      PR  NI    VIRT    RES    SHR S  %CPU %MEM     TIME+ COMMAND
+ 7395 root      20   0  958536 954840   3184 S 193.4 12.5  66:54.26 stress
+ 5285 root      20   0 1350820  93992  57944 S   3.3  1.2  32:44.09 kubelet
+ 4660 root      20   0 1263972  93524  40952 S   1.7  1.2  12:25.57 dockerd
+ 5773 root      20   0  137180  30552  23740 S   0.3  0.4   3:06.82 kube-proxy
+    1 root      20   0  159980   9304   6700 S   0.0  0.1   0:04.81 systemd
+    2 root      20   0       0      0      0 S   0.0  0.0   0:00.01 kthreadd
+    4 root       0 -20       0      0      0 I   0.0  0.0   0:00.00 kworker/0:0H
+    6 root       0 -20       0      0      0 I   0.0  0.0   0:00.00 mm_percpu_wq
+    7 root      20   0       0      0      0 S   0.0  0.0   0:01.17 ksoftirqd/0
+    8 root      20   0       0      0      0 I   0.0  0.0   0:29.27 rcu_sched
+    9 root      20   0       0      0      0 I   0.0  0.0   0:00.00 rcu_bh
+   10 root      rt   0       0      0      0 S   0.0  0.0   0:00.11 migration/0
+   11 root      rt   0       0      0      0 S   0.0  0.0   0:00.15 watchdog/0
+   12 root      20   0       0      0      0 S   0.0  0.0   0:00.00 cpuhp/0
+
+Now create the new deployment with the modified yaml file to include the namespace - low-usage-limit
+
+root@instance-1:~/test/CKA/LFS258# kubectl create -f hog2.yml
+deployment.extensions/hog created
+root@instance-1:~/test/CKA/LFS258# kubectl get deployments --all-namespaces
+NAMESPACE         NAME           READY   UP-TO-DATE   AVAILABLE   AGE
+default           hello-deploy   3/3     3            3           7h9m
+default           hog            1/1     1            1           35m
+kube-system       coredns        0/2     2            0           21h
+low-usage-limit   hog            1/1     1            1           42s
+low-usage-limit   limited-hog    1/1     1            1           6m23s
+
+
+Now stress will be the most resourceful in both the nodes as the new deployment hog-pod stress will not be deployed on node2
+root@instance-2:~# top
+top - 04:00:27 up 21:37,  1 user,  load average: 0.89, 0.36, 0.17
+Tasks: 127 total,   1 running,  87 sleeping,   0 stopped,   0 zombie
+%Cpu(s): 11.5 us, 40.9 sy,  0.0 ni, 47.6 id,  0.0 wa,  0.0 hi,  0.0 si,  0.0 st
+KiB Mem :  7652352 total,  3278912 free,  1407276 used,  2966164 buff/cache
+KiB Swap:        0 total,        0 free,        0 used.  5939832 avail Mem
+
+  PID USER      PR  NI    VIRT    RES    SHR S  %CPU %MEM     TIME+ COMMAND
+ 8463 root      20   0  958536 954632   3180 S 100.0 12.5   1:59.02 stress
+ 
+root@instance-3:~# top
+top - 04:00:51 up 21:35,  1 user,  load average: 2.36, 2.28, 2.13
+Tasks: 126 total,   1 running,  88 sleeping,   0 stopped,   0 zombie
+%Cpu(s): 21.2 us, 78.7 sy,  0.0 ni,  0.2 id,  0.0 wa,  0.0 hi,  0.0 si,  0.0 st
+KiB Mem :  7652344 total,  3346212 free,  1423796 used,  2882336 buff/cache
+KiB Swap:        0 total,        0 free,        0 used.  5923212 avail Mem
+
+  PID USER      PR  NI    VIRT    RES    SHR S  %CPU %MEM     TIME+ COMMAND
+ 7395 root      20   0  958536 954840   3184 S 196.0 12.5  73:34.47 stress
+ 
+ 
+Both hog deployments can be seen using the same resources
+
+== deleting them to free up memory ==
+root@instance-1:~/test/CKA/LFS258# kubectl get deployments --all-namespaces
+NAMESPACE         NAME           READY   UP-TO-DATE   AVAILABLE   AGE
+default           hello-deploy   3/3     3            3           7h9m
+default           hog            1/1     1            1           35m
+kube-system       coredns        0/2     2            0           21h
+low-usage-limit   hog            1/1     1            1           42s
+low-usage-limit   limited-hog    1/1     1            1           6m23s
+root@instance-1:~/test/CKA/LFS258# kubectl -n low-usage-limit delete deployments hog
+deployment.extensions "hog" deleted
+root@instance-1:~/test/CKA/LFS258# kubectl get deployments --all-namespaces
+NAMESPACE         NAME           READY   UP-TO-DATE   AVAILABLE   AGE
+default           hello-deploy   3/3     3            3           7h13m
+default           hog            1/1     1            1           39m
+kube-system       coredns        0/2     2            0           21h
+low-usage-limit   limited-hog    1/1     1            1           10m
+root@instance-1:~/test/CKA/LFS258# kubectl delete deployment hog
+deployment.extensions "hog" deleted
+root@instance-1:~/test/CKA/LFS258# kubectl get deployments --all-namespaces
+NAMESPACE         NAME           READY   UP-TO-DATE   AVAILABLE   AGE
+default           hello-deploy   3/3     3            3           7h14m
+kube-system       coredns        0/2     2            0           21h
+low-usage-limit   limited-hog    1/1     1            1           10m
+root@instance-1:~/test/CKA/LFS258# kubectl -n low-usage-limit delete deployments limited-hog
+deployment.extensions "limited-hog" deleted
+root@instance-1:~/test/CKA/LFS258# kubectl get deployments --all-namespaces
+NAMESPACE     NAME           READY   UP-TO-DATE   AVAILABLE   AGE
+default       hello-deploy   3/3     3            3           7h14m
+kube-system   coredns        0/2     2            0           21h
+root@instance-1:~/test/CKA/LFS258#
+
