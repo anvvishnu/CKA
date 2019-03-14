@@ -1,0 +1,634 @@
+LFS 258
+=====****====
+
+Notes in <+++ notes +++> means this is not in the output of the command but added in notepad++ for reference.
+
+https://kubernetes.io/docs/concepts/cluster-administration/networking/
+
+Networking for k8s
+
+In the google could k8s cluster that we created with three VM we used:
+
+Weave Net from Weaveworks
+-------------------------
+Weave Net is a resilient and simple to use network for Kubernetes and its hosted applications. Weave Net runs as a CNI plug-in or stand-alone. In either version, it doesn’t require any configuration or extra code to run, and in both cases, the network provides one IP address per pod - as is standard for Kubernetes.
+
+CNI: Container Network Interface
+https://github.com/containernetworking/cni
+
+CNI plugin can be used to configure the network of a pod and provide a single IP per pod
+CNI does not help in pod-to-pod communication across nodes
+
+Weave is a software defined overlay solution that enables this.
+
+NAT - Network Address Translation
+
+Mesos: http://mesos.apache.org/documentation/latest/architecture/
+
+============
+Lab 4.3
+============
+
+(1)==>
+root@master:~/CKA/CKA/LFS258# wget https://tinyurl.com/y8bn2awp -O complete-demo.yaml
+--2019-03-12 22:33:04--  https://tinyurl.com/y8bn2awp
+Resolving tinyurl.com (tinyurl.com)... 104.20.219.42, 104.20.218.42, 2606:4700:10::6814:db2a, ...
+Connecting to tinyurl.com (tinyurl.com)|104.20.219.42|:443... connected.
+HTTP request sent, awaiting response... 301 Moved Permanently
+Location: https://raw.githubusercontent.com/microservices-demo/microservices-demo/master/deploy/kubernetes/complete-demo.yaml [following]
+--2019-03-12 22:33:04--  https://raw.githubusercontent.com/microservices-demo/microservices-demo/master/deploy/kubernetes/complete-demo.yaml
+Resolving raw.githubusercontent.com (raw.githubusercontent.com)... 151.101.192.133, 151.101.128.133, 151.101.64.133, ...
+Connecting to raw.githubusercontent.com (raw.githubusercontent.com)|151.101.192.133|:443... connected.
+HTTP request sent, awaiting response... 200 OK
+Length: 12967 (13K) [text/plain]
+Saving to: ‘complete-demo.yaml’
+
+complete-demo.yaml                      100%[============================================================================>]  12.66K  --.-KB/s    in 0.01s
+
+2019-03-12 22:33:04 (1.04 MB/s) - ‘complete-demo.yaml’ saved [12967/12967]
+
+root@master:~/CKA/CKA/LFS258# ls -l
+total 364
+-rw-r--r-- 1 root root 187372 Mar 12 22:31 LAB_4.1.pdf
+-rw-r--r-- 1 root root 124083 Mar 12 22:31 LAB_4.2.pdf
+-rw-r--r-- 1 root root  10772 Mar 12 22:31 LFS258_LAB_4.1
+-rw-r--r-- 1 root root  15602 Mar 12 22:31 LFS258_LAB_4.2
+-rw-r--r-- 1 root root  12967 Mar 12 22:33 complete-demo.yaml
+-rw-r--r-- 1 root root   1318 Mar 12 22:31 hog.yml
+-rw-r--r-- 1 root root   1530 Mar 12 22:31 hog_new.yml
+
+
+2) ==>
+less complete-demo.yaml
+
+3) ==>
+
+Creating a new namespace ::
+
+root@master:~/CKA/CKA/LFS258# kubectl create namespace sock-shop
+namespace/sock-shop created
+root@master:~/CKA/CKA/LFS258# kubectl get namespaces
+NAME          STATUS   AGE
+default       Active   3h44m
+kube-public   Active   3h44m
+kube-system   Active   3h44m
+sock-shop     Active   7s
+
+Checking for images in complete-demo.yaml ::
+
+root@master:~/CKA/CKA/LFS258# grep image complete-demo.yaml
+        image: mongo
+        image: weaveworksdemos/carts:0.4.8
+        image: weaveworksdemos/catalogue-db:0.3.0
+        image: weaveworksdemos/catalogue:0.3.5
+        image: weaveworksdemos/front-end:0.3.12
+        image: mongo
+        image: weaveworksdemos/orders:0.4.7
+        image: weaveworksdemos/payment:0.4.3
+        image: weaveworksdemos/queue-master:0.3.1
+        image: rabbitmq:3.6.8
+        image: weaveworksdemos/shipping:0.4.8
+        image: weaveworksdemos/user-db:0.4.0
+        image: weaveworksdemos/user:0.4.7
+
+Creating deployments & other using complete-demo.yaml ::
+
+root@master:~/CKA/CKA/LFS258# kubectl apply -n sock-shop -f complete-demo.yaml
+deployment.extensions/carts-db created
+service/carts-db created
+deployment.extensions/carts created
+service/carts created
+deployment.extensions/catalogue-db created
+service/catalogue-db created
+deployment.extensions/catalogue created
+service/catalogue created
+deployment.extensions/front-end created
+service/front-end created
+deployment.extensions/orders-db created
+service/orders-db created
+deployment.extensions/orders created
+service/orders created
+deployment.extensions/payment created
+service/payment created
+deployment.extensions/queue-master created
+service/queue-master created
+deployment.extensions/rabbitmq created
+service/rabbitmq created
+deployment.extensions/shipping created
+service/shipping created
+deployment.extensions/user-db created
+service/user-db created
+deployment.extensions/user created
+service/user created
+
+=================================================================================================================
+Error condition when deployed on the earlier Google cloud VM as the port was already in use by another service
+==================================================================================================================
+The Service "front-end" is invalid: spec.ports[0].nodePort: Invalid value: 30001: provided port is already allocated
+root@instance-1:~/test/CKA/LFS258#
+
+
+We get an error because the earlier hello-pod that we deployed was with 30001 port - pluralsight excercises.
+
+To resolve the issues we have to stop the depolyment that we created earlier
+root@instance-1:~/test/CKA/LFS258# kubectl get deployments
+NAME           READY   UP-TO-DATE   AVAILABLE   AGE
+hello-deploy   3/3     3            3           20h
+root@instance-1:~/test/CKA/LFS258# kubectl delete deployment hello-deploy
+deployment.extensions "hello-deploy" deleted
+root@instance-1:~/test/CKA/LFS258# kubectl get pods
+NAME                            READY   STATUS        RESTARTS   AGE
+hello-deploy-747d4479fb-8vk4f   1/1     Terminating   0          19h
+hello-deploy-747d4479fb-n7wzt   1/1     Terminating   0          19h
+hello-deploy-747d4479fb-vr5jc   1/1     Terminating   0          19h
+root@instance-1:~/test/CKA/LFS258# kubectl get pods
+NAME                            READY   STATUS        RESTARTS   AGE
+hello-deploy-747d4479fb-8vk4f   1/1     Terminating   0          19h
+hello-deploy-747d4479fb-n7wzt   1/1     Terminating   0          19h
+hello-deploy-747d4479fb-vr5jc   1/1     Terminating   0          19h
+root@instance-1:~/test/CKA/LFS258# kubectl get pods
+NAME                            READY   STATUS        RESTARTS   AGE
+hello-deploy-747d4479fb-8vk4f   1/1     Terminating   0          19h
+hello-deploy-747d4479fb-n7wzt   1/1     Terminating   0          19h
+hello-deploy-747d4479fb-vr5jc   1/1     Terminating   0          19h
+root@instance-1:~/test/CKA/LFS258# kubectl get pods
+No resources found.
+root@instance-1:~/test/CKA/LFS258#
+
+Had to delete the service as well as that was mapped to 30001
+
+root@instance-1:~/test/CKA/LFS258# kubectl get services
+NAME         TYPE        CLUSTER-IP   EXTERNAL-IP   PORT(S)          AGE
+hello-svc    NodePort    10.98.71.1   <none>        8080:30001/TCP   21h
+kubernetes   ClusterIP   10.96.0.1    <none>        443/TCP          34h
+
+root@instance-1:~/test/CKA/LFS258# kubectl delete service hello-svc
+service "hello-svc" deleted
+root@instance-1:~/test/CKA/LFS258# kubectl get services
+NAME         TYPE        CLUSTER-IP   EXTERNAL-IP   PORT(S)   AGE
+kubernetes   ClusterIP   10.96.0.1    <none>        443/TCP   34h
+root@instance-1:~/test/CKA/LFS258#
+
+
+Now the creation of the sock-shop will work (we can also change the port number in complete-deploy.yaml)
+===============================================================================================================================
+
+
+6) ==>
+
+To check the pods in the specific namespace we need to use any one of the command
+
+root@master:~/CKA/CKA/LFS258# kubectl get pods --all-namespaces
+NAMESPACE     NAME                             READY   STATUS    RESTARTS   AGE
+kube-system   coredns-86c58d9df4-mtz54         1/1     Running   0          3h49m
+kube-system   coredns-86c58d9df4-tckjb         1/1     Running   0          3h49m
+kube-system   etcd-master                      1/1     Running   0          3h48m
+kube-system   kube-apiserver-master            1/1     Running   0          3h48m
+kube-system   kube-controller-manager-master   1/1     Running   0          3h48m
+kube-system   kube-proxy-65wnh                 1/1     Running   0          3h1m
+kube-system   kube-proxy-d4pjh                 1/1     Running   0          3h49m
+kube-system   kube-proxy-t92lx                 1/1     Running   0          167m
+kube-system   kube-scheduler-master            1/1     Running   0          3h48m
+kube-system   weave-net-4zltz                  2/2     Running   0          3h30m
+kube-system   weave-net-cjqts                  2/2     Running   1          167m
+kube-system   weave-net-n4fjq                  2/2     Running   1          3h1m
+sock-shop     carts-648d5f498d-vvz8r           1/1     Running   0          3m42s
+sock-shop     carts-db-64b6cc584f-zdj44        1/1     Running   0          3m42s
+sock-shop     catalogue-6759fc9bf5-2zpsv       1/1     Running   0          3m42s
+sock-shop     catalogue-db-99cbcbb88-km8bz     1/1     Running   0          3m42s
+sock-shop     front-end-77b48955b6-bd5nw       1/1     Running   0          3m42s
+sock-shop     orders-6496fcd6f7-sv76k          1/1     Running   0          3m42s
+sock-shop     orders-db-86f5c494b9-x68xs       1/1     Running   0          3m42s
+sock-shop     payment-7779bc549c-kz2vn         1/1     Running   0          3m42s
+sock-shop     queue-master-6bb75d8867-gl9pf    1/1     Running   0          3m42s
+sock-shop     rabbitmq-549bb9596f-xpj5q        1/1     Running   0          3m42s
+sock-shop     shipping-65769d99d7-kmxfh        1/1     Running   0          3m41s
+sock-shop     user-6b445f9b5b-z4zjq            1/1     Running   0          3m41s
+sock-shop     user-db-56bbb4c6db-7rqf4         1/1     Running   0          3m41s
+
+root@master:~/CKA/CKA/LFS258# kubectl get pods -n sock-shop
+NAME                            READY   STATUS    RESTARTS   AGE
+carts-648d5f498d-vvz8r          1/1     Running   0          4m45s
+carts-db-64b6cc584f-zdj44       1/1     Running   0          4m45s
+catalogue-6759fc9bf5-2zpsv      1/1     Running   0          4m45s
+catalogue-db-99cbcbb88-km8bz    1/1     Running   0          4m45s
+front-end-77b48955b6-bd5nw      1/1     Running   0          4m45s
+orders-6496fcd6f7-sv76k         1/1     Running   0          4m45s
+orders-db-86f5c494b9-x68xs      1/1     Running   0          4m45s
+payment-7779bc549c-kz2vn        1/1     Running   0          4m45s
+queue-master-6bb75d8867-gl9pf   1/1     Running   0          4m45s
+rabbitmq-549bb9596f-xpj5q       1/1     Running   0          4m45s
+shipping-65769d99d7-kmxfh       1/1     Running   0          4m44s
+user-6b445f9b5b-z4zjq           1/1     Running   0          4m44s
+user-db-56bbb4c6db-7rqf4        1/1     Running   0          4m44s
+
+
+When you want to decribe the pod of logs for a pod created in system namespace we need to use the following command
+root@instance-1:~# kubectl describe pod -n sock-shop shipping-65769d99d7-kmnd7
+Name:               shipping-65769d99d7-kmnd7
+Namespace:          sock-shop
+Priority:           0
+PriorityClassName:  <none>
+
+
+kubectl describe pod <pod_name> --namespace <namespace name>
+
+7) ==> 
+
+Checking the services created and the NodePort Service at 30001 port::
+
+root@master:~/CKA/CKA/LFS258# kubectl get svc -n sock-shop
+NAME           TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)        AGE
+carts          ClusterIP   10.108.159.173   <none>        80/TCP         5m37s
+carts-db       ClusterIP   10.98.156.135    <none>        27017/TCP      5m37s
+catalogue      ClusterIP   10.108.116.147   <none>        80/TCP         5m37s
+catalogue-db   ClusterIP   10.103.167.161   <none>        3306/TCP       5m37s
+front-end      NodePort    10.105.79.167    <none>        80:30001/TCP   5m37s
+orders         ClusterIP   10.108.187.120   <none>        80/TCP         5m37s
+orders-db      ClusterIP   10.96.218.106    <none>        27017/TCP      5m37s
+payment        ClusterIP   10.106.163.168   <none>        80/TCP         5m37s
+queue-master   ClusterIP   10.108.67.185    <none>        80/TCP         5m37s
+rabbitmq       ClusterIP   10.106.206.74    <none>        5672/TCP       5m37s
+shipping       ClusterIP   10.98.222.237    <none>        80/TCP         5m37s
+user           ClusterIP   10.107.107.189   <none>        80/TCP         5m36s
+user-db        ClusterIP   10.99.192.223    <none>        27017/TCP      5m36s
+
+Unable to access on the URL as this could be a problem with the google VM settings
+
+8) ==>
+
+Checking the containers running we can execute this in the nodes as well.
+
+root@master:~# sudo docker ps
+CONTAINER ID        IMAGE                   COMMAND                  CREATED             STATUS              PORTS               NAMES
+fe53f0b2405e        f59dcacceff4            "/coredns -conf /etc…"   47 hours ago        Up 47 hours                             k8s_coredns_coredns-86c58d9df4-mtz54_kube-system_8f932a93-44f7-11e9-8b01-42010a8e0002_0
+eb0cdc602fce        f59dcacceff4            "/coredns -conf /etc…"   47 hours ago        Up 47 hours                             k8s_coredns_coredns-86c58d9df4-tckjb_kube-system_8f96840e-44f7-11e9-8b01-42010a8e0002_0
+dcdfa58d6a24        k8s.gcr.io/pause:3.1    "/pause"                 47 hours ago        Up 47 hours                             k8s_POD_coredns-86c58d9df4-mtz54_kube-system_8f932a93-44f7-11e9-8b01-42010a8e0002_0
+190d35afbcf2        k8s.gcr.io/pause:3.1    "/pause"                 47 hours ago        Up 47 hours                             k8s_POD_coredns-86c58d9df4-tckjb_kube-system_8f96840e-44f7-11e9-8b01-42010a8e0002_0
+89ae67aa9c73        weaveworks/weave-npc    "/usr/bin/weave-npc"     47 hours ago        Up 47 hours                             k8s_weave-npc_weave-net-4zltz_kube-system_2549d8db-44fa-11e9-8b01-42010a8e0002_0
+38a16c41c222        weaveworks/weave-kube   "/home/weave/launch.…"   47 hours ago        Up 47 hours                             k8s_weave_weave-net-4zltz_kube-system_2549d8db-44fa-11e9-8b01-42010a8e0002_0
+cf0ac08174f7        k8s.gcr.io/pause:3.1    "/pause"                 47 hours ago        Up 47 hours                             k8s_POD_weave-net-4zltz_kube-system_2549d8db-44fa-11e9-8b01-42010a8e0002_0
+78b945a57ea8        fadcc5d2b066            "/usr/local/bin/kube…"   47 hours ago        Up 47 hours                             k8s_kube-proxy_kube-proxy-d4pjh_kube-system_8f8e9ff5-44f7-11e9-8b01-42010a8e0002_0
+e9b20577c995        k8s.gcr.io/pause:3.1    "/pause"                 47 hours ago        Up 47 hours                             k8s_POD_kube-proxy-d4pjh_kube-system_8f8e9ff5-44f7-11e9-8b01-42010a8e0002_0
+78df4d5063d5        dd862b749309            "kube-scheduler --ad…"   47 hours ago        Up 47 hours                             k8s_kube-scheduler_kube-scheduler-master_kube-system_4b52d75cab61380f07c0c5a69fb371d4_0
+214a5aa6384d        40a817357014            "kube-controller-man…"   47 hours ago        Up 47 hours                             k8s_kube-controller-manager_kube-controller-manager-master_kube-system_07da7a9fef9671ed77af5f8413eadadd_0
+49de9684b346        fc3801f0fc54            "kube-apiserver --au…"   47 hours ago        Up 47 hours                             k8s_kube-apiserver_kube-apiserver-master_kube-system_cde350bdd9dc9455662f2e6aa3aaf0ed_0
+cff1845df791        3cab8e1b9802            "etcd --advertise-cl…"   47 hours ago        Up 47 hours                             k8s_etcd_etcd-master_kube-system_aedfd7d8d2cbcb55053233f916461f11_0
+15ef9a1e6801        k8s.gcr.io/pause:3.1    "/pause"                 47 hours ago        Up 47 hours                             k8s_POD_kube-scheduler-master_kube-system_4b52d75cab61380f07c0c5a69fb371d4_0
+a82f94aa88ed        k8s.gcr.io/pause:3.1    "/pause"                 47 hours ago        Up 47 hours                             k8s_POD_kube-controller-manager-master_kube-system_07da7a9fef9671ed77af5f8413eadadd_0
+b46ff2696110        k8s.gcr.io/pause:3.1    "/pause"                 47 hours ago        Up 47 hours                             k8s_POD_kube-apiserver-master_kube-system_cde350bdd9dc9455662f2e6aa3aaf0ed_0
+bd2862a74455        k8s.gcr.io/pause:3.1    "/pause"                 47 hours ago        Up 47 hours                             k8s_POD_etcd-master_kube-system_aedfd7d8d2cbcb55053233f916461f11_0
+root@master:~# sudo docker ps | wc -l
+18
+root@master:~#
+
+== Node 1 == (sudo is not required)
+root@node1:~# sudo docker ps
+CONTAINER ID        IMAGE                          COMMAND                  CREATED             STATUS              PORTS               NAMES
+41ea4398fbb6        weaveworksdemos/queue-master   "/usr/local/bin/java…"   44 hours ago        Up 44 hours                             k8s_queue-master_queue-master-6bb75d8867-gl9pf_sock-shop_127f24c0-4517-11e9-8b01-42010a8e0002_0
+41bdaa6ae303        weaveworksdemos/user-db        "/entrypoint.sh mong…"   44 hours ago        Up 44 hours                             k8s_user-db_user-db-56bbb4c6db-7rqf4_sock-shop_12bbcc3c-4517-11e9-8b01-42010a8e0002_0
+3f8f45f87614        weaveworksdemos/payment        "/app -port=80"          44 hours ago        Up 44 hours                             k8s_payment_payment-7779bc549c-kz2vn_sock-shop_126b1d37-4517-11e9-8b01-42010a8e0002_0
+4d95411e0c99        mongo                          "docker-entrypoint.s…"   44 hours ago        Up 44 hours                             k8s_orders-db_orders-db-86f5c494b9-x68xs_sock-shop_124fb59a-4517-11e9-8b01-42010a8e0002_0
+649dfc32a99f        weaveworksdemos/catalogue      "/app -port=80"          44 hours ago        Up 44 hours                             k8s_catalogue_catalogue-6759fc9bf5-2zpsv_sock-shop_1233e30f-4517-11e9-8b01-42010a8e0002_0
+386e97019353        weaveworksdemos/carts          "/usr/local/bin/java…"   44 hours ago        Up 44 hours                             k8s_carts_carts-648d5f498d-vvz8r_sock-shop_121290ef-4517-11e9-8b01-42010a8e0002_0
+3adf3effc478        k8s.gcr.io/pause:3.1           "/pause"                 44 hours ago        Up 44 hours                             k8s_POD_user-db-56bbb4c6db-7rqf4_sock-shop_12bbcc3c-4517-11e9-8b01-42010a8e0002_0
+b787398153c8        k8s.gcr.io/pause:3.1           "/pause"                 44 hours ago        Up 44 hours                             k8s_POD_payment-7779bc549c-kz2vn_sock-shop_126b1d37-4517-11e9-8b01-42010a8e0002_0
+5fa2e9cf37f4        k8s.gcr.io/pause:3.1           "/pause"                 44 hours ago        Up 44 hours                             k8s_POD_queue-master-6bb75d8867-gl9pf_sock-shop_127f24c0-4517-11e9-8b01-42010a8e0002_0
+429151c0af23        k8s.gcr.io/pause:3.1           "/pause"                 44 hours ago        Up 44 hours                             k8s_POD_orders-db-86f5c494b9-x68xs_sock-shop_124fb59a-4517-11e9-8b01-42010a8e0002_0
+4681eb29c1a0        k8s.gcr.io/pause:3.1           "/pause"                 44 hours ago        Up 44 hours                             k8s_POD_catalogue-6759fc9bf5-2zpsv_sock-shop_1233e30f-4517-11e9-8b01-42010a8e0002_0
+e2edcbb39fd0        k8s.gcr.io/pause:3.1           "/pause"                 44 hours ago        Up 44 hours                             k8s_POD_carts-648d5f498d-vvz8r_sock-shop_121290ef-4517-11e9-8b01-42010a8e0002_0
+748aaf482cad        1f394ae9e226                   "/home/weave/launch.…"   46 hours ago        Up 46 hours                             k8s_weave_weave-net-cjqts_kube-system_2550cf4c-4500-11e9-8b01-42010a8e0002_1
+2f098e4c9a54        weaveworks/weave-npc           "/usr/bin/weave-npc"     46 hours ago        Up 46 hours                             k8s_weave-npc_weave-net-cjqts_kube-system_2550cf4c-4500-11e9-8b01-42010a8e0002_0
+b1350ebf1c83        k8s.gcr.io/kube-proxy          "/usr/local/bin/kube…"   46 hours ago        Up 46 hours                             k8s_kube-proxy_kube-proxy-t92lx_kube-system_255085b6-4500-11e9-8b01-42010a8e0002_0
+8cb51f673c4a        k8s.gcr.io/pause:3.1           "/pause"                 46 hours ago        Up 46 hours                             k8s_POD_weave-net-cjqts_kube-system_2550cf4c-4500-11e9-8b01-42010a8e0002_0
+1d3e7e233054        k8s.gcr.io/pause:3.1           "/pause"                 46 hours ago        Up 46 hours                             k8s_POD_kube-proxy-t92lx_kube-system_255085b6-4500-11e9-8b01-42010a8e0002_0
+root@node1:~# sudo docker ps | wc -l
+18
+root@node1:~#
+
+
+== Node 2 ==
+root@node2:~# docker ps
+CONTAINER ID        IMAGE                          COMMAND                  CREATED             STATUS              PORTS               NAMES
+acf47c0996ef        weaveworksdemos/user           "/user -port=80"         44 hours ago        Up 44 hours                             k8s_user_user-6b445f9b5b-z4zjq_sock-shop_12cb4c2f-4517-11e9-8b01-42010a8e0002_0
+539fd80204cb        weaveworksdemos/orders         "/usr/local/bin/java…"   44 hours ago        Up 44 hours                             k8s_orders_orders-6496fcd6f7-sv76k_sock-shop_125c8405-4517-11e9-8b01-42010a8e0002_0
+7450976bfb4c        weaveworksdemos/shipping       "/usr/local/bin/java…"   44 hours ago        Up 44 hours                             k8s_shipping_shipping-65769d99d7-kmxfh_sock-shop_12a5b14f-4517-11e9-8b01-42010a8e0002_0
+444a11bf3945        rabbitmq                       "docker-entrypoint.s…"   44 hours ago        Up 44 hours                             k8s_rabbitmq_rabbitmq-549bb9596f-xpj5q_sock-shop_1295a59f-4517-11e9-8b01-42010a8e0002_0
+3309473572e1        weaveworksdemos/front-end      "/usr/local/bin/npm …"   44 hours ago        Up 44 hours                             k8s_front-end_front-end-77b48955b6-bd5nw_sock-shop_12401189-4517-11e9-8b01-42010a8e0002_0
+b070db3129d2        weaveworksdemos/catalogue-db   "docker-entrypoint.s…"   44 hours ago        Up 44 hours                             k8s_catalogue-db_catalogue-db-99cbcbb88-km8bz_sock-shop_1220ac8d-4517-11e9-8b01-42010a8e0002_0
+55f8c202261f        mongo                          "docker-entrypoint.s…"   44 hours ago        Up 44 hours                             k8s_carts-db_carts-db-64b6cc584f-zdj44_sock-shop_120a262f-4517-11e9-8b01-42010a8e0002_0
+5dbd6b180c90        k8s.gcr.io/pause:3.1           "/pause"                 44 hours ago        Up 44 hours                             k8s_POD_user-6b445f9b5b-z4zjq_sock-shop_12cb4c2f-4517-11e9-8b01-42010a8e0002_0
+2578675854c8        k8s.gcr.io/pause:3.1           "/pause"                 44 hours ago        Up 44 hours                             k8s_POD_shipping-65769d99d7-kmxfh_sock-shop_12a5b14f-4517-11e9-8b01-42010a8e0002_0
+1d5b11ee1513        k8s.gcr.io/pause:3.1           "/pause"                 44 hours ago        Up 44 hours                             k8s_POD_rabbitmq-549bb9596f-xpj5q_sock-shop_1295a59f-4517-11e9-8b01-42010a8e0002_0
+0d32b20f6bfe        k8s.gcr.io/pause:3.1           "/pause"                 44 hours ago        Up 44 hours                             k8s_POD_orders-6496fcd6f7-sv76k_sock-shop_125c8405-4517-11e9-8b01-42010a8e0002_0
+61d34a4e6949        k8s.gcr.io/pause:3.1           "/pause"                 44 hours ago        Up 44 hours                             k8s_POD_catalogue-db-99cbcbb88-km8bz_sock-shop_1220ac8d-4517-11e9-8b01-42010a8e0002_0
+76087c7d0894        k8s.gcr.io/pause:3.1           "/pause"                 44 hours ago        Up 44 hours                             k8s_POD_front-end-77b48955b6-bd5nw_sock-shop_12401189-4517-11e9-8b01-42010a8e0002_0
+dfdbec00774f        k8s.gcr.io/pause:3.1           "/pause"                 44 hours ago        Up 44 hours                             k8s_POD_carts-db-64b6cc584f-zdj44_sock-shop_120a262f-4517-11e9-8b01-42010a8e0002_0
+bd49d7a0f149        1f394ae9e226                   "/home/weave/launch.…"   47 hours ago        Up 47 hours                             k8s_weave_weave-net-n4fjq_kube-system_4b502e47-44fe-11e9-8b01-42010a8e0002_1
+03d50cbec74e        weaveworks/weave-npc           "/usr/bin/weave-npc"     47 hours ago        Up 47 hours                             k8s_weave-npc_weave-net-n4fjq_kube-system_4b502e47-44fe-11e9-8b01-42010a8e0002_0
+f27aef31254b        k8s.gcr.io/kube-proxy          "/usr/local/bin/kube…"   47 hours ago        Up 47 hours                             k8s_kube-proxy_kube-proxy-65wnh_kube-system_4b5011dd-44fe-11e9-8b01-42010a8e0002_0
+273e470a5009        k8s.gcr.io/pause:3.1           "/pause"                 47 hours ago        Up 47 hours                             k8s_POD_kube-proxy-65wnh_kube-system_4b5011dd-44fe-11e9-8b01-42010a8e0002_0
+08c133e0a847        k8s.gcr.io/pause:3.1           "/pause"                 47 hours ago        Up 47 hours                             k8s_POD_weave-net-n4fjq_kube-system_4b502e47-44fe-11e9-8b01-42010a8e0002_0
+root@node2:~# docker ps | wc -l
+20
+root@node2:~#
+
+
+9) ==>
+
+checking number of deployments
+
+root@master:~# kubectl get deployments --all-namespaces
+NAMESPACE     NAME           READY   UP-TO-DATE   AVAILABLE   AGE
+kube-system   coredns        2/2     2            2           47h
+sock-shop     carts          1/1     1            1           43h
+sock-shop     carts-db       1/1     1            1           43h
+sock-shop     catalogue      1/1     1            1           43h
+sock-shop     catalogue-db   1/1     1            1           43h
+sock-shop     front-end      1/1     1            1           43h
+sock-shop     orders         1/1     1            1           43h
+sock-shop     orders-db      1/1     1            1           43h
+sock-shop     payment        1/1     1            1           43h
+sock-shop     queue-master   1/1     1            1           43h
+sock-shop     rabbitmq       1/1     1            1           43h
+sock-shop     shipping       1/1     1            1           43h
+sock-shop     user           1/1     1            1           43h
+sock-shop     user-db        1/1     1            1           43h
+root@master:~# kubectl get deployments --all-namespaces | wc -l
+15 (14 removing the heading)
+root@master:~#
+
+10) ==>
+Checking number of containers on the master and node using docker ps | wc -latest/architecture/
+
+11) ==> 
+
+Obtaining the nodes
+
+root@master:~# kubectl get nodes
+NAME     STATUS                     ROLES    AGE   VERSION
+master   Ready                      master   47h   v1.13.4
+node1    Ready,SchedulingDisabled   <none>   46h   v1.13.4
+node2    Ready                      <none>   46h   v1.13.4
+
+
+Since we already tried to drain node1 we are getting the status as SchedulingDisabled
+
+12) ==>
+
+Modifying node2 to drain the pods, this will return an error
+
+kubectl drain node1
+
+root@master:~# kubectl drain node1
+node/node1 already cordoned
+error: unable to drain node "node1", aborting command...
+
+There are pending nodes to be drained:
+ node1
+error: DaemonSet-managed pods (use --ignore-daemonsets to ignore): kube-proxy-t92lx, weave-net-cjqts; pods with local storage (use --delete-local-data to override): carts-648d5f498d-vvz8r, orders-db-86f5c494b9-x68xs, user-db-56bbb4c6db-7rqf4
+root@master:~#
+
+
+Since we have drained node1 there is taint on it not to allow any pod from scheduling, if you check node2 it has not taint as we have not drained the pods there
+
+root@master:~# kubectl describe node | grep -i taint
+Taints:             node-role.kubernetes.io/master:NoSchedule
+Taints:             node.kubernetes.io/unschedulable:NoSchedule
+Taints:             <none>
+root@master:~# kubectl describe node node1 | grep -i taint
+Taints:             node.kubernetes.io/unschedulable:NoSchedule
+root@master:~# kubectl describe node node2 | grep -i taint
+Taints:             <none>
+root@master:~#
+
+
+More about taints and tolerations in https://kubernetes.io/docs/concepts/configuration/taint-and-toleration/
+
+For node1 you can see there is a taint which will not allow the scheduler to run any pods on the node1
+
+13 ==>
+
+Use --ignore-daemonsets
+
+root@master:~# kubectl get pods --all-namespaces -o wide | grep node1 | wc -l
+8
+root@master:~# kubectl drain node1 --ignore-daemonsets
+node/node1 already cordoned
+error: unable to drain node "node1", aborting command...
+
+There are pending nodes to be drained:
+ node1
+error: pods with local storage (use --delete-local-data to override): carts-648d5f498d-vvz8r, orders-db-86f5c494b9-x68xs, user-db-56bbb4c6db-7rqf4
+root@master:~# kubectl get pods --all-namespaces -o wide | grep node1 | wc -l
+8
+
+14 ==>
+
+using delete-local-data
+
+root@master:~# kubectl drain node1 \
+> --ignore-daemonsets --delete-local-data
+node/node1 already cordoned
+WARNING: Ignoring DaemonSet-managed pods: kube-proxy-t92lx, weave-net-cjqts; Deleting pods with local storage: carts-648d5f498d-vvz8r, orders-db-86f5c494b9-x68xs, user-db-56bbb4c6db-7rqf4
+pod/payment-7779bc549c-kz2vn evicted
+pod/orders-db-86f5c494b9-x68xs evicted
+pod/user-db-56bbb4c6db-7rqf4 evicted
+pod/catalogue-6759fc9bf5-2zpsv evicted
+pod/carts-648d5f498d-vvz8r evicted
+pod/queue-master-6bb75d8867-gl9pf evicted
+node/node1 evicted
+
+
+root@master:~# kubectl get pods --all-namespaces -o wide | grep node1 | wc -l
+2
+root@master:~#
+
+
+Now we can see only two pods present. These remaining pods will only be evicted using a special taint to be seen later....
+
+15 ==>
+
+Checking the number of containers in node1
+
+root@node1:~# sudo docker ps | wc -l
+6
+root@node1:~#
+
+We will see lesser containers now
+
+16 ==>
+
+Update the node taint for node1 so that the scheduler can choose it again
+
+root@master:~# kubectl describe node | grep -i taint
+Taints:             node-role.kubernetes.io/master:NoSchedule
+Taints:             <none>
+Taints:             <none>
+root@master:~# kubectl describe node node1 | grep -i taint
+Taints:             <none>
+root@master:~#
+
+You can see here that the taint for node1 has gone, there is only a taint on the node as we cannot schedule any pods on the node.
+
+Number of pods
+root@node1:~# docker ps | wc -l
+6
+root@node1:~#
+
+
+17 ==>
+
+root@master:~# kubectl -n sock-shop get pod
+NAME                            READY   STATUS    RESTARTS   AGE
+carts-648d5f498d-dh4bv          1/1     Running   0          9m56s
+carts-db-64b6cc584f-zdj44       1/1     Running   0          46h
+catalogue-6759fc9bf5-5grbc      1/1     Running   0          9m56s
+catalogue-db-99cbcbb88-km8bz    1/1     Running   0          46h
+front-end-77b48955b6-bd5nw      1/1     Running   0          46h
+orders-6496fcd6f7-sv76k         1/1     Running   0          46h
+orders-db-86f5c494b9-9tdpr      1/1     Running   0          9m56s
+payment-7779bc549c-jp8kc        1/1     Running   0          9m56s
+queue-master-6bb75d8867-2pvvj   1/1     Running   0          9m56s
+rabbitmq-549bb9596f-xpj5q       1/1     Running   0          46h
+shipping-65769d99d7-kmxfh       1/1     Running   0          46h
+user-6b445f9b5b-z4zjq           1/1     Running   0          46h
+user-db-56bbb4c6db-mzzm9        1/1     Running   0          9m56s
+
+
+We have a two node k8s cluster so the output might be different
+
+18 ==>
+
+Let us delete a few pods from the above
+
+root@master:~# kubectl delete pod -n sock-shop \
+> carts-648d5f498d-dh4bv catalogue-db-99cbcbb88-km8bz front-end-77b48955b6-bd5nw \
+> queue-master-6bb75d8867-2pvvj orders-db-86f5c494b9-9tdpr
+pod "carts-648d5f498d-dh4bv" deleted
+pod "catalogue-db-99cbcbb88-km8bz" deleted
+pod "front-end-77b48955b6-bd5nw" deleted
+pod "queue-master-6bb75d8867-2pvvj" deleted
+pod "orders-db-86f5c494b9-9tdpr" deleted
+
+19 ==>
+
+Checking the number of pods again
+
+Since the Deployment controller noticed that the pods were not matching the manifest (desired state) they will be created again
+
+root@master:~# kubectl get pods -n sock-shop
+NAME                            READY   STATUS    RESTARTS   AGE
+carts-648d5f498d-jjm5q          1/1     Running   0          65s
+carts-db-64b6cc584f-zdj44       1/1     Running   0          46h
+catalogue-6759fc9bf5-5grbc      1/1     Running   0          15m
+catalogue-db-99cbcbb88-w8nff    1/1     Running   0          65s
+front-end-77b48955b6-qq5tw      1/1     Running   0          65s
+orders-6496fcd6f7-sv76k         1/1     Running   0          46h
+orders-db-86f5c494b9-q2m74      1/1     Running   0          65s
+payment-7779bc549c-jp8kc        1/1     Running   0          15m
+queue-master-6bb75d8867-wbpx9   1/1     Running   0          65s
+rabbitmq-549bb9596f-xpj5q       1/1     Running   0          46h
+shipping-65769d99d7-kmxfh       1/1     Running   0          46h
+user-6b445f9b5b-z4zjq           1/1     Running   0          46h
+user-db-56bbb4c6db-mzzm9        1/1     Running   0          15m
+root@master:~#
+
+20 ==> 
+
+Delete resources via deployments
+ 
+root@master:~# kubectl get deployment -n sock-shop
+NAME           READY   UP-TO-DATE   AVAILABLE   AGE
+carts          1/1     1            1           46h
+carts-db       1/1     1            1           46h
+catalogue      1/1     1            1           46h
+catalogue-db   1/1     1            1           46h
+front-end      1/1     1            1           46h
+orders         1/1     1            1           46h
+orders-db      1/1     1            1           46h
+payment        1/1     1            1           46h
+queue-master   1/1     1            1           46h
+rabbitmq       1/1     1            1           46h
+shipping       1/1     1            1           46h
+user           1/1     1            1           46h
+user-db        1/1     1            1           46h
+
+
+root@master:~# kubectl get deployment -n sock-shop
+NAME           READY   UP-TO-DATE   AVAILABLE   AGE
+carts          1/1     1            1           46h
+carts-db       1/1     1            1           46h
+catalogue      1/1     1            1           46h
+catalogue-db   1/1     1            1           46h
+front-end      1/1     1            1           46h
+orders         1/1     1            1           46h
+orders-db      1/1     1            1           46h
+payment        1/1     1            1           46h
+queue-master   1/1     1            1           46h
+rabbitmq       1/1     1            1           46h
+shipping       1/1     1            1           46h
+user           1/1     1            1           46h
+user-db        1/1     1            1           46h
+root@master:~# kubectl delete deployment -n sock-shop \
+> catalogue catalogue-db front-end orders
+deployment.extensions "catalogue" deleted
+deployment.extensions "catalogue-db" deleted
+deployment.extensions "front-end" deleted
+deployment.extensions "orders" deleted
+
+22 ==>
+
+Checking deleted pods and deployments
+
+root@master:~# kubectl get deployment -n sock-shop
+NAME           READY   UP-TO-DATE   AVAILABLE   AGE
+carts          1/1     1            1           46h
+carts-db       1/1     1            1           46h
+orders-db      1/1     1            1           46h
+payment        1/1     1            1           46h
+queue-master   1/1     1            1           46h
+rabbitmq       1/1     1            1           46h
+shipping       1/1     1            1           46h
+user           1/1     1            1           46h
+user-db        1/1     1            1           46h
+root@master:~# kubectl get pods -n sock-shop | grep catalogue
+root@master:~#
+
+23 ==> Delete all the deployments
+
+Since the complete-deploy.yaml file is not there we did the deployment new on the new VM getting it again
+
+root@master:~/CKA/CKA# kubectl delete deployment -f complete-demo.yaml
+error: when paths, URLs, or stdin is provided as input, you may not specify resource arguments as well
+root@master:~/CKA/CKA# kubectl delete -f complete-demo.yaml
+deployment.extensions "carts-db" deleted
+service "carts-db" deleted
+deployment.extensions "carts" deleted
+service "carts" deleted
+service "catalogue-db" deleted
+service "catalogue" deleted
+service "front-end" deleted
+deployment.extensions "orders-db" deleted
+service "orders-db" deleted
+service "orders" deleted
+deployment.extensions "payment" deleted
+service "payment" deleted
+deployment.extensions "queue-master" deleted
+service "queue-master" deleted
+deployment.extensions "rabbitmq" deleted
+service "rabbitmq" deleted
+deployment.extensions "shipping" deleted
+service "shipping" deleted
+deployment.extensions "user-db" deleted
+service "user-db" deleted
+deployment.extensions "user" deleted
+service "user" deleted
+Error from server (NotFound): error when deleting "complete-demo.yaml": deployments.extensions "catalogue-db" not found
+Error from server (NotFound): error when deleting "complete-demo.yaml": deployments.extensions "catalogue" not found
+Error from server (NotFound): error when deleting "complete-demo.yaml": deployments.extensions "front-end" not found
+Error from server (NotFound): error when deleting "complete-demo.yaml": deployments.extensions "orders" not found
+root@master:~/CKA/CKA#
+
+
+When we use the -f option we cannot specify deployment as it will delete everything that is present in the file.
